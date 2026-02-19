@@ -19,7 +19,27 @@
     </nav>
 
     <div class="main-container">
-        <h1>Dashboard</h1>
+        <div class="dashboard-header">
+            <h1>Dashboard</h1>
+            <div class="data-actions">
+                <button onclick="exportData()" class="btn-export">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                        <polyline points="7 10 12 15 17 10"/>
+                        <line x1="12" y1="15" x2="12" y2="3"/>
+                    </svg>
+                    Export Data
+                </button>
+                <button onclick="importData()" class="btn-import">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                        <polyline points="17 8 12 3 7 8"/>
+                        <line x1="12" y1="3" x2="12" y2="15"/>
+                    </svg>
+                    Import Data
+                </button>
+            </div>
+        </div>
         
         <div class="twibbon-list">
             <h2>Twibbon Anda</h2>
@@ -29,50 +49,19 @@
         </div>
     </div>
 
-    <script>
-        // Cek login
-        if (!sessionStorage.getItem('isLoggedIn')) {
-            window.location.href = 'login.html';
-        }
+    <!-- Modal untuk Import -->
+    <div id="importModal" class="modal">
+        <div class="modal-content">
+            <h3>Import Data Twibbon</h3>
+            <p>Pilih file backup yang sebelumnya diexport</p>
+            <input type="file" id="importFile" accept=".json">
+            <div class="modal-actions">
+                <button onclick="closeModal()" class="btn-cancel">Batal</button>
+                <button onclick="processImport()" class="btn-confirm">Import</button>
+            </div>
+        </div>
+    </div>
 
-        function logout() {
-            sessionStorage.removeItem('isLoggedIn');
-            window.location.href = 'login.html';
-        }
-
-        // Load twibbon dari localStorage
-        function loadTwibbons() {
-            const twibbons = JSON.parse(localStorage.getItem('twibbons') || '[]');
-            const grid = document.getElementById('twibbonGrid');
-            
-            if (twibbons.length === 0) {
-                grid.innerHTML = '<p>Belum ada twibbon. <a href="create.html">Buat twibbon sekarang</a></p>';
-                return;
-            }
-            
-            grid.innerHTML = twibbons.map(twibbon => `
-                <div class="twibbon-card">
-                    <img src="${twibbon.image}" alt="Twibbon">
-                    <h3>${twibbon.name}</h3>
-                    <p>Link: <a href="${twibbon.generateLink}" target="_blank">${twibbon.generateLink}</a></p>
-                    <button onclick="copyLink('${twibbon.id}')" class="btn-copy">Copy Link</button>
-                </div>
-            `).join('');
-        }
-
-        function copyLink(id) {
-            const twibbons = JSON.parse(localStorage.getItem('twibbons') || '[]');
-            const twibbon = twibbons.find(t => t.id === id);
-            
-            if (twibbon) {
-                navigator.clipboard.writeText(window.location.origin + '/' + twibbon.generateLink)
-                    .then(() => alert('Link berhasil dicopy!'))
-                    .catch(() => alert('Gagal menyalin link'));
-            }
-        }
-
-        loadTwibbons();
-    </script>
     <script src="js/main.js"></script>
 </body>
 </html>
