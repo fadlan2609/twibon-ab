@@ -26,7 +26,6 @@ function formatDate(dateString) {
 
 // Show notification
 function showNotification(message, type = 'success') {
-    // Cek apakah container notifikasi sudah ada
     let notificationContainer = document.querySelector('.notification-container');
     
     if (!notificationContainer) {
@@ -41,10 +40,118 @@ function showNotification(message, type = 'success') {
     
     notificationContainer.appendChild(notification);
     
-    // Auto remove setelah 3 detik
     setTimeout(() => {
         notification.remove();
     }, 3000);
+}
+
+// ==================== EXPORT/IMPORT FUNCTIONS ====================
+
+// Export data ke file JSON
+function exportData() {
+    try {
+        const twibbons = localStorage.getItem('twibbons') || '[]';
+        const dataStr = JSON.stringify(JSON.parse(twibbons), null, 2);
+        const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+        
+        const exportFileDefaultName = `twibbon-backup-${new Date().toISOString().slice(0,10)}.json`;
+        const linkElement = document.createElement('a');
+        linkElement.setAttribute('href', dataUri);
+        linkElement.setAttribute('download', exportFileDefaultName);
+        linkElement.click();
+        
+        showNotification('Data berhasil diexport!', 'success');
+    } catch (error) {
+        showNotification('Gagal export data: ' + error.message, 'error');
+    }
+}
+
+// Buka modal import
+function importData() {
+    const modal = document.getElementById('importModal');
+    if (modal) {
+        modal.style.display = 'block';
+    } else {
+        // Fallback: langsung buka file picker
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.json';
+        
+        input.onchange = (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    try {
+                        const importedData = JSON.parse(event.target.result);
+                        
+                        // Validasi format data
+                        if (Array.isArray(importedData)) {
+                            // Backup data lama
+                            const oldData = localStorage.getItem('twibbons');
+                            
+                            if (confirm('Data yang ada akan ditimpa. Lanjutkan?')) {
+                                localStorage.setItem('twibbons', JSON.stringify(importedData));
+                                showNotification('Data berhasil diimport!', 'success');
+                                setTimeout(() => location.reload(), 1000);
+                            }
+                        } else {
+                            showNotification('Format file tidak valid!', 'error');
+                        }
+                    } catch (error) {
+                        showNotification('Gagal membaca file: ' + error.message, 'error');
+                    }
+                };
+                reader.readAsText(file);
+            }
+        };
+        
+        input.click();
+    }
+}
+
+// Proses import dari modal
+function processImport() {
+    const fileInput = document.getElementById('importFile');
+    const file = fileInput.files[0];
+    
+    if (!file) {
+        showNotification('Pilih file terlebih dahulu!', 'error');
+        return;
+    }
+    
+    const reader = new FileReader();
+    reader.onload = (event) => {
+        try {
+            const importedData = JSON.parse(event.target.result);
+            
+            // Validasi format data
+            if (Array.isArray(importedData)) {
+                // Tanyakan konfirmasi
+                if (confirm('Data yang ada akan ditimpa. Lanjutkan?')) {
+                    localStorage.setItem('twibbons', JSON.stringify(importedData));
+                    showNotification('Data berhasil diimport!', 'success');
+                    closeModal();
+                    setTimeout(() => location.reload(), 1000);
+                }
+            } else {
+                showNotification('Format file tidak valid! Harus berupa array', 'error');
+            }
+        } catch (error) {
+            showNotification('Gagal membaca file: ' + error.message, 'error');
+        }
+    };
+    reader.readAsText(file);
+}
+
+// Tutup modal
+function closeModal() {
+    const modal = document.getElementById('importModal');
+    if (modal) {
+        modal.style.display = 'none';
+        const fileInput = document.getElementById('importFile');
+        if (fileInput) fileInput.value = '';
+    }
 }
 
 // ==================== TWIBBON MANAGEMENT ====================
@@ -66,7 +173,6 @@ function addTwibbon(name, imageData) {
         id: generateId(),
         name: name,
         image: imageData,
-        generateLink: `generate.html?id=${generateId()}`,
         createdAt: new Date().toISOString(),
         views: 0,
         downloads: 0
@@ -103,136 +209,7 @@ function deleteTwibbon(id) {
     const twibbons = getTwibbons();
     const filtered = twibbons.filter(t => t.id !== id);
     saveTwibbons(filtered);
-    
-    // Hapus juga gambar dari localStorage jika ada
-    const imageKey = `twibbon_image_${id}`;
-    localStorage.removeItem(imageKey);
-    
     return true;
-}
-
-// ==================== IMAGE PROCESSING ====================
-
-// Compress image sebelum disimpan
-function compressImage(dataUrl, maxSize = 500) {
-    return new Promise((resolve) => {
-        const img = new Image();
-        img.src = dataUrl;
-        
-        img.onload = function() {
-            const canvas = document.createElement('canvas');
-            let width = img.width;
-            let height = img.height;
-            
-            // Resize jika terlalu besar
-            if (width > maxSize || height > maxSize) {
-                if (width > height) {
-                    height = Math.round((height * maxSize) / width);
-                    width = maxSize;
-                } else {
-                    width = Math.round((width * maxSize) / height);
-                    height = maxSize;
-                }
-            }
-            
-            canvas.width = width;
-            canvas.height = height;
-            
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(img, 0, 0, width, height);
-            
-            // Kompres ke JPEG dengan kualitas 0.8
-            resolve(canvas.toDataURL('image/jpeg', 0.8));
-        };
-    });
-}
-
-// Convert file ke data URL
-function fileToDataUrl(file) {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = (e) => resolve(e.target.result);
-        reader.onerror = (e) => reject(e);
-        reader.readAsDataURL(file);
-    });
-}
-
-// Validasi file gambar
-function validateImage(file) {
-    const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
-    const maxSize = 5 * 1024 * 1024; // 5MB
-    
-    if (!validTypes.includes(file.type)) {
-        throw new Error('Tipe file tidak didukung. Gunakan JPG, PNG, atau GIF.');
-    }
-    
-    if (file.size > maxSize) {
-        throw new Error('Ukuran file terlalu besar. Maksimal 5MB.');
-    }
-    
-    return true;
-}
-
-// ==================== GENERATE & DOWNLOAD ====================
-
-// Generate twibbon dengan foto user
-async function generateTwibbonImage(userPhotoData, twibbonData) {
-    return new Promise((resolve) => {
-        const canvas = document.createElement('canvas');
-        canvas.width = 500;
-        canvas.height = 500;
-        const ctx = canvas.getContext('2d');
-        
-        // Load user photo
-        const userImg = new Image();
-        userImg.crossOrigin = "anonymous";
-        
-        userImg.onload = function() {
-            // Gambar foto user sebagai background
-            ctx.drawImage(userImg, 0, 0, canvas.width, canvas.height);
-            
-            // Load twibbon overlay
-            const twibbonImg = new Image();
-            twibbonImg.crossOrigin = "anonymous";
-            
-            twibbonImg.onload = function() {
-                // Gambar twibbon di atas foto
-                ctx.drawImage(twibbonImg, 0, 0, canvas.width, canvas.height);
-                
-                // Return hasil
-                resolve(canvas.toDataURL('image/png'));
-            };
-            
-            twibbonImg.src = twibbonData.image;
-        };
-        
-        userImg.src = userPhotoData;
-    });
-}
-
-// Download gambar
-function downloadImage(dataUrl, filename = 'twibbon.png') {
-    const link = document.createElement('a');
-    link.download = filename;
-    link.href = dataUrl;
-    link.click();
-}
-
-// Copy teks ke clipboard
-async function copyToClipboard(text) {
-    try {
-        await navigator.clipboard.writeText(text);
-        showNotification('Link berhasil disalin!', 'success');
-    } catch (err) {
-        // Fallback untuk browser lama
-        const textarea = document.createElement('textarea');
-        textarea.value = text;
-        document.body.appendChild(textarea);
-        textarea.select();
-        document.execCommand('copy');
-        document.body.removeChild(textarea);
-        showNotification('Link berhasil disalin!', 'success');
-    }
 }
 
 // ==================== DASHBOARD FUNCTIONS ====================
@@ -286,9 +263,9 @@ function copyLink(id) {
     const twibbon = getTwibbonById(id);
     if (twibbon) {
         const link = `${window.location.origin}/generate.html?id=${twibbon.id}`;
-        copyToClipboard(link);
+        navigator.clipboard.writeText(link);
+        showNotification('Link berhasil disalin!', 'success');
         
-        // Update views count
         updateTwibbon(id, { views: (twibbon.views || 0) + 1 });
     }
 }
@@ -306,7 +283,7 @@ function shareTwibbon(id) {
                 url: link
             });
         } else {
-            copyToClipboard(link);
+            copyLink(id);
         }
     }
 }
@@ -330,63 +307,24 @@ function previewImage(input, canvasId) {
     const file = input.files[0];
     if (!file) return;
     
-    try {
-        validateImage(file);
-        
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            const img = new Image();
-            img.onload = function() {
-                const ctx = canvas.getContext('2d');
-                canvas.width = 300;
-                canvas.height = 300;
-                
-                // Hitung posisi agar gambar pas di canvas
-                const scale = Math.max(canvas.width / img.width, canvas.height / img.height);
-                const x = (canvas.width - img.width * scale) / 2;
-                const y = (canvas.height - img.height * scale) / 2;
-                
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-                ctx.drawImage(img, x, y, img.width * scale, img.height * scale);
-            };
-            img.src = e.target.result;
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const img = new Image();
+        img.onload = function() {
+            const ctx = canvas.getContext('2d');
+            canvas.width = 300;
+            canvas.height = 300;
+            
+            const scale = Math.max(canvas.width / img.width, canvas.height / img.height);
+            const x = (canvas.width - img.width * scale) / 2;
+            const y = (canvas.height - img.height * scale) / 2;
+            
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(img, x, y, img.width * scale, img.height * scale);
         };
-        reader.readAsDataURL(file);
-        
-        return true;
-    } catch (error) {
-        showNotification(error.message, 'error');
-        input.value = '';
-        return false;
-    }
-}
-
-// Create twibbon baru
-async function createNewTwibbon(name, file) {
-    try {
-        validateImage(file);
-        
-        // Convert ke data URL
-        const dataUrl = await fileToDataUrl(file);
-        
-        // Compress image
-        const compressedImage = await compressImage(dataUrl);
-        
-        // Simpan ke localStorage
-        const twibbon = addTwibbon(name, compressedImage);
-        
-        showNotification('Twibbon berhasil dibuat!', 'success');
-        
-        // Redirect ke dashboard setelah 1 detik
-        setTimeout(() => {
-            window.location.href = 'dashboard.html';
-        }, 1000);
-        
-        return twibbon;
-    } catch (error) {
-        showNotification(error.message, 'error');
-        throw error;
-    }
+        img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
 }
 
 // ==================== GENERATE PAGE FUNCTIONS ====================
@@ -396,46 +334,110 @@ function loadGeneratePage() {
     const urlParams = new URLSearchParams(window.location.search);
     const twibbonId = urlParams.get('id');
     
+    const twibbonInfo = document.getElementById('twibbonInfo');
+    
     if (!twibbonId) {
-        showNotification('ID Twibbon tidak ditemukan', 'error');
-        setTimeout(() => window.location.href = 'index.html', 2000);
+        if (twibbonInfo) {
+            twibbonInfo.innerHTML = '<div class="error-message">ID Twibbon tidak ditemukan!</div>';
+        }
         return null;
     }
     
     const twibbon = getTwibbonById(twibbonId);
-    if (!twibbon) {
-        showNotification('Twibbon tidak ditemukan', 'error');
-        setTimeout(() => window.location.href = 'index.html', 2000);
-        return null;
+    
+    if (twibbonInfo) {
+        if (twibbon) {
+            twibbonInfo.innerHTML = `
+                <div class="twibbon-info-card">
+                    <h2>${twibbon.name}</h2>
+                    <img src="${twibbon.image}" alt="${twibbon.name}" class="twibbon-preview">
+                </div>
+            `;
+        } else {
+            twibbonInfo.innerHTML = `
+                <div class="error-message">
+                    <h3>Twibbon tidak ditemukan!</h3>
+                    <p>Mungkin Anda perlu meng-import data terlebih dahulu.</p>
+                    <button onclick="window.location.href='dashboard.html'" class="btn-primary">Ke Dashboard</button>
+                </div>
+            `;
+        }
     }
     
     return twibbon;
 }
 
-// Generate dengan foto user
-async function generateWithUserPhoto(userPhotoFile, twibbon) {
+// Generate twibbon
+async function generateTwibbon() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const twibbonId = urlParams.get('id');
+    const twibbon = getTwibbonById(twibbonId);
+    
+    if (!twibbon) {
+        showNotification('Twibbon tidak ditemukan!', 'error');
+        return;
+    }
+    
+    const fileInput = document.getElementById('userPhoto');
+    const file = fileInput.files[0];
+    
+    if (!file) {
+        showNotification('Harap pilih foto terlebih dahulu!', 'error');
+        return;
+    }
+    
+    const canvas = document.getElementById('resultCanvas');
+    const ctx = canvas.getContext('2d');
+    const generateBtn = document.getElementById('generateBtn');
+    const downloadBtn = document.getElementById('downloadBtn');
+    
+    generateBtn.disabled = true;
+    generateBtn.textContent = 'Generating...';
+    
     try {
-        validateImage(userPhotoFile);
+        const userImg = new Image();
+        userImg.src = URL.createObjectURL(file);
         
-        // Convert user photo
-        const userPhotoData = await fileToDataUrl(userPhotoFile);
-        
-        // Generate twibbon
-        const result = await generateTwibbonImage(userPhotoData, twibbon);
-        
-        // Update download count
-        updateTwibbon(twibbon.id, { downloads: (twibbon.downloads || 0) + 1 });
-        
-        return result;
+        await new Promise((resolve) => {
+            userImg.onload = function() {
+                ctx.drawImage(userImg, 0, 0, canvas.width, canvas.height);
+                
+                const twibbonImg = new Image();
+                twibbonImg.onload = function() {
+                    ctx.drawImage(twibbonImg, 0, 0, canvas.width, canvas.height);
+                    
+                    window.generatedImage = canvas.toDataURL('image/png');
+                    downloadBtn.style.display = 'inline-block';
+                    
+                    updateTwibbon(twibbonId, { downloads: (twibbon.downloads || 0) + 1 });
+                    
+                    showNotification('Berhasil digenerate!', 'success');
+                    resolve();
+                };
+                twibbonImg.src = twibbon.image;
+            };
+        });
     } catch (error) {
-        showNotification(error.message, 'error');
-        throw error;
+        showNotification('Gagal generate: ' + error.message, 'error');
+    } finally {
+        generateBtn.disabled = false;
+        generateBtn.textContent = 'Generate';
     }
 }
 
-// ==================== EVENT LISTENERS ====================
+// Download gambar
+function downloadImage() {
+    if (window.generatedImage) {
+        const link = document.createElement('a');
+        link.download = `twibbon-${Date.now()}.png`;
+        link.href = window.generatedImage;
+        link.click();
+        showNotification('Download berhasil!', 'success');
+    }
+}
 
-// Login form handler
+// ==================== LOGIN FORM HANDLER ====================
+
 function initLoginForm() {
     const form = document.getElementById('loginForm');
     if (!form) return;
@@ -447,270 +449,21 @@ function initLoginForm() {
         const password = document.getElementById('password').value;
         const errorDiv = document.getElementById('errorMessage');
         
-        // Credentials: username: user, password: #selaluamanah
         if (username === 'user' && password === '#selaluamanah') {
             sessionStorage.setItem('isLoggedIn', 'true');
-            sessionStorage.setItem('username', username);
             sessionStorage.setItem('loginTime', new Date().toISOString());
-            
             showNotification('Login berhasil!', 'success');
-            
-            setTimeout(() => {
-                window.location.href = 'dashboard.html';
-            }, 500);
+            setTimeout(() => window.location.href = 'dashboard.html', 500);
         } else {
             errorDiv.textContent = 'Username atau password salah!';
-            showNotification('Login gagal!', 'error');
         }
     });
-}
-
-// Create form handler
-function initCreateForm() {
-    const form = document.getElementById('createForm');
-    const fileInput = document.getElementById('twibbonImage');
-    const previewCanvas = document.getElementById('previewCanvas');
-    
-    if (!form) return;
-    
-    // Preview image
-    if (fileInput) {
-        fileInput.addEventListener('change', function(e) {
-            previewImage(this, 'previewCanvas');
-        });
-    }
-    
-    // Submit form
-    form.addEventListener('submit', async function(e) {
-        e.preventDefault();
-        
-        const name = document.getElementById('twibbonName').value;
-        const file = document.getElementById('twibbonImage').files[0];
-        
-        if (!name || !file) {
-            showNotification('Harap isi semua field!', 'error');
-            return;
-        }
-        
-        // Disable button
-        const submitBtn = form.querySelector('button[type="submit"]');
-        submitBtn.disabled = true;
-        submitBtn.textContent = 'Menyimpan...';
-        
-        try {
-            await createNewTwibbon(name, file);
-        } catch (error) {
-            submitBtn.disabled = false;
-            submitBtn.textContent = 'Buat Twibbon';
-        }
-    });
-}
-
-// Generate page handler
-function initGeneratePage() {
-    const twibbon = loadGeneratePage();
-    if (!twibbon) return;
-    
-    const fileInput = document.getElementById('userPhoto');
-    const generateBtn = document.getElementById('generateBtn');
-    const downloadBtn = document.getElementById('downloadBtn');
-    const canvas = document.getElementById('resultCanvas');
-    
-    let generatedImage = null;
-    
-    if (fileInput) {
-        fileInput.addEventListener('change', function(e) {
-            previewImage(this, 'resultCanvas');
-        });
-    }
-    
-    if (generateBtn) {
-        generateBtn.addEventListener('click', async function() {
-            const file = fileInput.files[0];
-            
-            if (!file) {
-                showNotification('Harap pilih foto terlebih dahulu!', 'error');
-                return;
-            }
-            
-            // Disable button
-            generateBtn.disabled = true;
-            generateBtn.textContent = 'Generating...';
-            
-            try {
-                generatedImage = await generateWithUserPhoto(file, twibbon);
-                
-                // Tampilkan di canvas
-                const img = new Image();
-                img.onload = function() {
-                    const ctx = canvas.getContext('2d');
-                    ctx.clearRect(0, 0, canvas.width, canvas.height);
-                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                };
-                img.src = generatedImage;
-                
-                // Tampilkan tombol download
-                downloadBtn.style.display = 'inline-block';
-                showNotification('Berhasil digenerate!', 'success');
-            } catch (error) {
-                console.error(error);
-            } finally {
-                generateBtn.disabled = false;
-                generateBtn.textContent = 'Generate';
-            }
-        });
-    }
-    
-    if (downloadBtn) {
-        downloadBtn.addEventListener('click', function() {
-            if (generatedImage) {
-                downloadImage(generatedImage, `twibbon-${Date.now()}.png`);
-                showNotification('Download berhasil!', 'success');
-            }
-        });
-    }
 }
 
 // ==================== INITIALIZATION ====================
 
-// Inisialisasi berdasarkan halaman
 document.addEventListener('DOMContentLoaded', function() {
     const path = window.location.pathname;
-    
-    // Tambahkan style untuk notifikasi
-    const style = document.createElement('style');
-    style.textContent = `
-        .notification-container {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            z-index: 9999;
-        }
-        
-        .notification {
-            padding: 15px 20px;
-            margin-bottom: 10px;
-            border-radius: 4px;
-            color: white;
-            font-weight: 500;
-            animation: slideIn 0.3s ease;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-        }
-        
-        .notification-success {
-            background-color: #27ae60;
-        }
-        
-        .notification-error {
-            background-color: #e74c3c;
-        }
-        
-        .notification-info {
-            background-color: #3498db;
-        }
-        
-        @keyframes slideIn {
-            from {
-                transform: translateX(100%);
-                opacity: 0;
-            }
-            to {
-                transform: translateX(0);
-                opacity: 1;
-            }
-        }
-        
-        .empty-state {
-            text-align: center;
-            padding: 50px;
-            background: white;
-            border-radius: 8px;
-        }
-        
-        .empty-state img {
-            max-width: 200px;
-            margin-bottom: 20px;
-        }
-        
-        .empty-state h3 {
-            margin-bottom: 10px;
-            color: #2c3e50;
-        }
-        
-        .empty-state p {
-            margin-bottom: 20px;
-            color: #666;
-        }
-        
-        .card-link {
-            display: flex;
-            gap: 5px;
-            margin: 10px 0;
-        }
-        
-        .card-link input {
-            flex: 1;
-            padding: 5px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            font-size: 12px;
-        }
-        
-        .card-actions {
-            display: flex;
-            gap: 5px;
-            margin-top: 10px;
-        }
-        
-        .btn-small {
-            padding: 5px 10px;
-            background-color: #3498db;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-        
-        .btn-share {
-            flex: 1;
-            padding: 8px;
-            background-color: #2ecc71;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-        
-        .btn-delete {
-            flex: 1;
-            padding: 8px;
-            background-color: #e74c3c;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-        
-        .card-stats {
-            display: flex;
-            gap: 10px;
-            margin: 5px 0;
-            color: #666;
-            font-size: 14px;
-        }
-        
-        .card-date {
-            color: #999;
-            font-size: 12px;
-            margin: 5px 0;
-        }
-        
-        button:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-    `;
-    document.head.appendChild(style);
     
     // Inisialisasi berdasarkan halaman
     if (path.includes('login.html')) {
@@ -720,12 +473,38 @@ document.addEventListener('DOMContentLoaded', function() {
         renderTwibbonGrid();
     } else if (path.includes('create.html')) {
         checkLogin();
-        initCreateForm();
+        
+        const createForm = document.getElementById('createForm');
+        if (createForm) {
+            document.getElementById('twibbonImage').addEventListener('change', function(e) {
+                previewImage(this, 'previewCanvas');
+            });
+            
+            createForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                const name = document.getElementById('twibbonName').value;
+                const file = document.getElementById('twibbonImage').files[0];
+                
+                if (!name || !file) {
+                    showNotification('Harap isi semua field!', 'error');
+                    return;
+                }
+                
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    addTwibbon(name, event.target.result);
+                    showNotification('Twibbon berhasil dibuat!', 'success');
+                    setTimeout(() => window.location.href = 'dashboard.html', 1000);
+                };
+                reader.readAsDataURL(file);
+            });
+        }
     } else if (path.includes('generate.html')) {
-        initGeneratePage();
+        loadGeneratePage();
     }
     
-    // Auto logout setelah 1 jam (security feature)
+    // Auto logout setelah 1 jam
     if (sessionStorage.getItem('isLoggedIn')) {
         const loginTime = new Date(sessionStorage.getItem('loginTime')).getTime();
         const now = new Date().getTime();
@@ -740,7 +519,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Export functions untuk digunakan di HTML
 window.logout = logout;
+window.exportData = exportData;
+window.importData = importData;
+window.processImport = processImport;
+window.closeModal = closeModal;
 window.copyLink = copyLink;
 window.shareTwibbon = shareTwibbon;
 window.deleteTwibbonPrompt = deleteTwibbonPrompt;
+window.generateTwibbon = generateTwibbon;
 window.downloadImage = downloadImage;
