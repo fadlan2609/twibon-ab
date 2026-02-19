@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Generate Twibbon - Twibbon App</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <h2>Twibbon App</h2>
+            <div class="nav-menu">
+                <a href="index.html">Home</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="main-container">
+        <h1>Generate Twibbon</h1>
+        
+        <div class="generate-container">
+            <div class="upload-section">
+                <h3>Upload Foto Anda</h3>
+                <input type="file" id="userPhoto" accept="image/*" required>
+            </div>
+            
+            <div class="preview-section">
+                <h3>Preview:</h3>
+                <canvas id="resultCanvas" width="500" height="500"></canvas>
+            </div>
+            
+            <div class="actions">
+                <button onclick="generateTwibbon()" class="btn-generate">Generate</button>
+                <button onclick="downloadImage()" id="downloadBtn" class="btn-download" style="display:none;">Download</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentTwibbon = null;
+        let generatedImage = null;
+        
+        // Ambil ID dari URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const twibbonId = urlParams.get('id');
+        
+        // Load twibbon
+        function loadTwibbon() {
+            const twibbons = JSON.parse(localStorage.getItem('twibbons') || '[]');
+            currentTwibbon = twibbons.find(t => t.id === twibbonId);
+            
+            if (!currentTwibbon) {
+                alert('Twibbon tidak ditemukan!');
+                window.location.href = 'index.html';
+            }
+        }
+        
+        loadTwibbon();
+        
+        let userImage = null;
+        
+        document.getElementById('userPhoto').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    userImage = event.target.result;
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+        
+        function generateTwibbon() {
+            if (!userImage || !currentTwibbon) {
+                alert('Harap upload foto terlebih dahulu!');
+                return;
+            }
+            
+            const canvas = document.getElementById('resultCanvas');
+            const ctx = canvas.getContext('2d');
+            
+            // Load user photo
+            const userImg = new Image();
+            userImg.crossOrigin = "anonymous";
+            
+            userImg.onload = function() {
+                // Gambar foto user (background)
+                ctx.drawImage(userImg, 0, 0, canvas.width, canvas.height);
+                
+                // Load twibbon (overlay)
+                const twibbonImg = new Image();
+                twibbonImg.crossOrigin = "anonymous";
+                
+                twibbonImg.onload = function() {
+                    // Gambar twibbon di atas foto
+                    ctx.drawImage(twibbonImg, 0, 0, canvas.width, canvas.height);
+                    
+                    // Simpan hasil
+                    generatedImage = canvas.toDataURL('image/png');
+                    
+                    // Tampilkan tombol download
+                    document.getElementById('downloadBtn').style.display = 'inline-block';
+                };
+                
+                twibbonImg.src = currentTwibbon.image;
+            };
+            
+            userImg.src = userImage;
+        }
+        
+        function downloadImage() {
+            if (generatedImage) {
+                const link = document.createElement('a');
+                link.download = `twibbon-${Date.now()}.png`;
+                link.href = generatedImage;
+                link.click();
+            }
+        }
+    </script>
+    <script src="js/main.js"></script>
+</body>
+</html>

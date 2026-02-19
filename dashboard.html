@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Twibbon App</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <h2>Twibbon App</h2>
+            <div class="nav-menu">
+                <a href="dashboard.html">Dashboard</a>
+                <a href="create.html">Buat Twibbon</a>
+                <button onclick="logout()" class="btn-logout">Logout</button>
+            </div>
+        </div>
+    </nav>
+
+    <div class="main-container">
+        <h1>Dashboard</h1>
+        
+        <div class="twibbon-list">
+            <h2>Twibbon Anda</h2>
+            <div id="twibbonGrid" class="twibbon-grid">
+                <!-- Twibbon akan ditampilkan di sini -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Cek login
+        if (!sessionStorage.getItem('isLoggedIn')) {
+            window.location.href = 'login.html';
+        }
+
+        function logout() {
+            sessionStorage.removeItem('isLoggedIn');
+            window.location.href = 'login.html';
+        }
+
+        // Load twibbon dari localStorage
+        function loadTwibbons() {
+            const twibbons = JSON.parse(localStorage.getItem('twibbons') || '[]');
+            const grid = document.getElementById('twibbonGrid');
+            
+            if (twibbons.length === 0) {
+                grid.innerHTML = '<p>Belum ada twibbon. <a href="create.html">Buat twibbon sekarang</a></p>';
+                return;
+            }
+            
+            grid.innerHTML = twibbons.map(twibbon => `
+                <div class="twibbon-card">
+                    <img src="${twibbon.image}" alt="Twibbon">
+                    <h3>${twibbon.name}</h3>
+                    <p>Link: <a href="${twibbon.generateLink}" target="_blank">${twibbon.generateLink}</a></p>
+                    <button onclick="copyLink('${twibbon.id}')" class="btn-copy">Copy Link</button>
+                </div>
+            `).join('');
+        }
+
+        function copyLink(id) {
+            const twibbons = JSON.parse(localStorage.getItem('twibbons') || '[]');
+            const twibbon = twibbons.find(t => t.id === id);
+            
+            if (twibbon) {
+                navigator.clipboard.writeText(window.location.origin + '/' + twibbon.generateLink)
+                    .then(() => alert('Link berhasil dicopy!'))
+                    .catch(() => alert('Gagal menyalin link'));
+            }
+        }
+
+        loadTwibbons();
+    </script>
+    <script src="js/main.js"></script>
+</body>
+</html>
